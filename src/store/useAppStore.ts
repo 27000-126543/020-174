@@ -11,6 +11,7 @@ interface AppState {
   setPatientAttributes: (attrs: Partial<PatientAttributes>) => void;
   personalSpeeches: PersonalSpeech[];
   addPersonalSpeech: (speech: Omit<PersonalSpeech, 'id' | 'createdAt'>) => void;
+  updatePersonalSpeech: (id: string, updates: Partial<Pick<PersonalSpeech, 'content' | 'category' | 'tags'>>) => void;
   deletePersonalSpeech: (id: string) => void;
   reviewRecords: ReviewRecord[];
   addReviewRecord: (record: Omit<ReviewRecord, 'id' | 'createdAt'>) => void;
@@ -65,6 +66,14 @@ export const useAppStore = create<AppState>((set) => ({
   deletePersonalSpeech: (id) =>
     set((state) => {
       const updated = state.personalSpeeches.filter((s) => s.id !== id);
+      saveToStorage('personalSpeeches', updated);
+      return { personalSpeeches: updated };
+    }),
+  updatePersonalSpeech: (id, updates) =>
+    set((state) => {
+      const updated = state.personalSpeeches.map((s) =>
+        s.id === id ? { ...s, ...updates } : s
+      );
       saveToStorage('personalSpeeches', updated);
       return { personalSpeeches: updated };
     }),
