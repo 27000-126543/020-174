@@ -27,7 +27,7 @@ export interface SpeechWithFeedback extends SpeechItem {
   usedCount: number;
 }
 
-export type TreatmentType = 'root_canal' | 'filling' | 'implant' | 'orthodontics';
+export type TreatmentType = 'root_canal' | 'filling' | 'implant' | 'orthodontics' | 'removable_denture' | 'fixed_bridge';
 
 export interface TreatmentCard {
   type: TreatmentType;

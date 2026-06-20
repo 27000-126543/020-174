@@ -1,5 +1,5 @@
 
-import { HeartPulse, PlusCircle, CircleGauge, AlignEndHorizontal } from 'lucide-react';
+import { HeartPulse, PlusCircle, CircleGauge, AlignEndHorizontal, MoveHorizontal, Link } from 'lucide-react';
 import type { TreatmentType } from '@/types';
 import { treatmentCards } from '@/data/treatments';
 
@@ -8,6 +8,8 @@ const iconMap: Record<TreatmentType, typeof HeartPulse> = {
   filling: PlusCircle,
   implant: CircleGauge,
   orthodontics: AlignEndHorizontal,
+  removable_denture: MoveHorizontal,
+  fixed_bridge: Link,
 };
 
 interface TreatmentSelectorProps {

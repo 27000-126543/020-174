@@ -1,11 +1,12 @@
 
-import { useState } from 'react';
-import { FileText, AlertCircle, ArrowLeftRight, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { FileText, AlertCircle, ArrowLeftRight, StickyNote, Save } from 'lucide-react';
 import type { TreatmentType } from '@/types';
 import { treatmentCards } from '@/data/treatments';
 import { TreatmentSelector } from '@/components/treatment/TreatmentSelector';
 import { TreatmentCardComponent } from '@/components/treatment/TreatmentCard';
 import { TreatmentComparison } from '@/components/treatment/TreatmentComparison';
+import { useAppStore } from '@/store/useAppStore';
 
 type ViewMode = 'single' | 'compare';
 
@@ -14,10 +15,31 @@ export function TreatmentPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('single');
   const [compareA, setCompareA] = useState<TreatmentType | null>(null);
   const [compareB, setCompareB] = useState<TreatmentType | null>(null);
+  const [currentNote, setCurrentNote] = useState('');
+
+  const comparisonNotes = useAppStore((state) => state.comparisonNotes);
+  const setComparisonNote = useAppStore((state) => state.setComparisonNote);
 
   const selectedCard = treatmentCards.find((c) => c.type === selectedTreatment);
   const cardA = treatmentCards.find((c) => c.type === compareA);
   const cardB = treatmentCards.find((c) => c.type === compareB);
+
+  const pairKey = compareA && compareB ? `${compareA}__${compareB}` : '';
+  const reversePairKey = compareA && compareB ? `${compareB}__${compareA}` : '';
+
+  useEffect(() => {
+    if (pairKey) {
+      setCurrentNote(comparisonNotes[pairKey] || comparisonNotes[reversePairKey] || '');
+    } else {
+      setCurrentNote('');
+    }
+  }, [pairKey, reversePairKey, comparisonNotes]);
+
+  const handleSaveNote = () => {
+    if (pairKey) {
+      setComparisonNote(pairKey, currentNote);
+    }
+  };
 
   const handleSelectSingle = (type: TreatmentType | null) => {
     setSelectedTreatment(type);
@@ -87,8 +109,37 @@ export function TreatmentPage() {
           <TreatmentCardComponent card={selectedCard} />
         </div>
       ) : viewMode === 'compare' && canCompare && cardA && cardB ? (
-        <div className="animate-fade-in">
+        <div className="space-y-4 animate-fade-in">
           <TreatmentComparison cardA={cardA} cardB={cardB} />
+
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                <StickyNote className="w-4 h-4 text-amber-500" />
+                医生讲解备注
+                <span className="text-xs text-gray-400 font-normal">
+                  （{cardA.name} vs {cardB.name}）
+                </span>
+              </h3>
+              <button
+                onClick={handleSaveNote}
+                className="flex items-center gap-1 px-3 py-1.5 text-xs text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition-colors"
+              >
+                <Save className="w-3 h-3" />
+                保存备注
+              </button>
+            </div>
+            <textarea
+              value={currentNote}
+              onChange={(e) => setCurrentNote(e.target.value)}
+              placeholder={`记录患者对「${cardA.name}」和「${cardB.name}」最关心的问题、顾虑点、讲解重点等...`}
+              rows={4}
+              className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none"
+            />
+            <p className="text-xs text-gray-400 mt-2">
+              💡 备注会自动关联当前对比项目，下次切换到此组合时自动加载，刷新不丢失
+            </p>
+          </div>
         </div>
       ) : (
         <div className="bg-white rounded-2xl p-12 shadow-sm border border-gray-100 text-center">

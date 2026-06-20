@@ -15,6 +15,8 @@ interface AppState {
   deletePersonalSpeech: (id: string) => void;
   reviewRecords: ReviewRecord[];
   addReviewRecord: (record: Omit<ReviewRecord, 'id' | 'createdAt'>) => void;
+  comparisonNotes: Record<string, string>;
+  setComparisonNote: (pairKey: string, note: string) => void;
 }
 
 const loadFromStorage = <T>(key: string, defaultValue: T): T => {
@@ -89,5 +91,13 @@ export const useAppStore = create<AppState>((set) => ({
       const updated = [...state.reviewRecords, newRecord];
       saveToStorage('reviewRecords', updated);
       return { reviewRecords: updated };
+    }),
+
+  comparisonNotes: loadFromStorage('comparisonNotes', {}),
+  setComparisonNote: (pairKey, note) =>
+    set((state) => {
+      const updated = { ...state.comparisonNotes, [pairKey]: note };
+      saveToStorage('comparisonNotes', updated);
+      return { comparisonNotes: updated };
     }),
 }));
