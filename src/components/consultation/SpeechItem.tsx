@@ -34,7 +34,8 @@ export function SpeechItemComponent({ item, index }: SpeechItemProps) {
     addPersonalSpeech({
       content: item.content,
       category: item.section,
-      tags: item.tags,
+      tags: [...item.tags, '接诊收藏'],
+      source: 'consult_collect',
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);

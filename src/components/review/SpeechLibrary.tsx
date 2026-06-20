@@ -14,10 +14,14 @@ import {
   Star,
   RotateCcw,
   Filter,
+  Heart,
+  History,
+  Lightbulb,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
+import type { PersonalSpeech } from '@/types';
 
-type SourceFilter = 'all' | 'auto' | 'manual' | 'review';
+type SourceFilter = 'all' | 'consult_collect' | 'review_auto' | 'review_manual' | 'review_all';
 
 const categoryLabels: Record<string, string> = {
   greeting: '开场问候',
@@ -28,12 +32,13 @@ const categoryLabels: Record<string, string> = {
   objection_handling: '异议处理',
 };
 
-const sourceLabels: Record<SourceFilter, string> = {
-  all: '全部来源',
-  auto: '自动沉淀',
-  manual: '手动收藏',
-  review: '复盘来源',
-};
+const sourceFilterOptions: { value: SourceFilter; label: string; icon: typeof Star; color: string }[] = [
+  { value: 'all', label: '全部来源', icon: Star, color: 'bg-gray-100 text-gray-600' },
+  { value: 'consult_collect', label: '接诊收藏', icon: Heart, color: 'bg-rose-100 text-rose-600' },
+  { value: 'review_all', label: '全部复盘', icon: RotateCcw, color: 'bg-orange-100 text-orange-600' },
+  { value: 'review_auto', label: '自动沉淀', icon: Sparkles, color: 'bg-amber-100 text-amber-600' },
+  { value: 'review_manual', label: '复盘手写', icon: Pencil, color: 'bg-blue-100 text-blue-600' },
+];
 
 const allCategories = Object.entries(categoryLabels);
 
@@ -47,59 +52,101 @@ const commonStuckPoints = [
   '和家人商量',
 ];
 
-function getSpeechSource(tags: string[]): 'auto' | 'manual' {
-  return tags.includes('自动沉淀') ? 'auto' : 'manual';
-}
+function getSourceInfo(speech: PersonalSpeech) {
+  const source = speech.source || (speech.tags.includes('接诊收藏') ? 'consult_collect' : 'manual_edit');
 
-function getSourceInfo(tags: string[]) {
-  const isAuto = tags.includes('自动沉淀');
-  const isManual = tags.includes('手动沉淀');
-  const isSmooth = tags.includes('顺利复盘');
-  const stuckPointTag = tags.find((t) => commonStuckPoints.includes(t) || t === '自定义卡点' || t === '预设卡点');
-  const customTag = tags.find((t) => !Object.values(categoryLabels).includes(t) && t !== '自动沉淀' && t !== '手动沉淀' && t !== '自定义卡点' && t !== '预设卡点' && t !== '顺利复盘');
-
-  if (isSmooth) {
+  if (source === 'consult_collect') {
+    const complaintTag = speech.tags.find((t) =>
+      ['toothache', 'missing_tooth', 'malocclusion', 'cleaning'].includes(t)
+    );
+    const complaintLabels: Record<string, string> = {
+      toothache: '牙痛',
+      missing_tooth: '缺牙',
+      malocclusion: '牙齿不齐',
+      cleaning: '洗牙咨询',
+    };
     return {
-      label: '复盘 · 顺利',
-      color: 'bg-emerald-100 text-emerald-700',
-      icon: Star,
-      detail: '来自顺利沟通复盘',
+      label: '接诊收藏',
+      color: 'bg-rose-100 text-rose-700',
+      icon: Heart,
+      detail: complaintTag
+        ? `来自「${complaintLabels[complaintTag] || complaintTag}」接诊场景`
+        : '接诊沟通中收藏',
+      isReview: false,
     };
   }
 
-  if (stuckPointTag && stuckPointTag !== '预设卡点' && stuckPointTag !== '自定义卡点') {
-    return {
-      label: `复盘 · ${stuckPointTag}`,
-      color: 'bg-orange-100 text-orange-700',
-      icon: RotateCcw,
-      detail: `来自「${stuckPointTag}」卡点复盘`,
-    };
-  }
+  if (source === 'review_auto') {
+    const isSmooth = speech.tags.includes('顺利复盘');
+    const stuckTag = speech.tags.find((t) => commonStuckPoints.includes(t));
+    const isCustom = speech.tags.includes('自定义卡点');
 
-  if (isAuto) {
+    if (isSmooth) {
+      return {
+        label: '复盘·顺利',
+        color: 'bg-emerald-100 text-emerald-700',
+        icon: Star,
+        detail: '来自顺利沟通复盘',
+        isReview: true,
+      };
+    }
+    if (stuckTag) {
+      return {
+        label: `复盘·${stuckTag}`,
+        color: 'bg-orange-100 text-orange-700',
+        icon: RotateCcw,
+        detail: `来自「${stuckTag}」卡点自动沉淀`,
+        isReview: true,
+      };
+    }
+    if (isCustom) {
+      const customTag = speech.tags.find(
+        (t) =>
+          !['自动沉淀', '预设卡点', '自定义卡点', 'objection_handling'].includes(t) &&
+          !commonStuckPoints.includes(t) && t !== speech.category
+      );
+      return {
+        label: '复盘·自定义卡点',
+        color: 'bg-violet-100 text-violet-700',
+        icon: Lightbulb,
+        detail: customTag ? `针对「${customTag}」自动生成` : '自定义卡点自动沉淀',
+        isReview: true,
+      };
+    }
     return {
-      label: '自动沉淀',
+      label: '复盘·自动沉淀',
       color: 'bg-amber-100 text-amber-700',
       icon: Sparkles,
-      detail: customTag ? `关联「${customTag}」` : '系统自动生成',
+      detail: '系统自动生成话术',
+      isReview: true,
     };
   }
 
-  if (isManual) {
+  if (source === 'review_manual') {
     return {
-      label: '手动沉淀',
+      label: '复盘·手写',
       color: 'bg-blue-100 text-blue-700',
-      icon: Star,
+      icon: Pencil,
       detail: '复盘时手动输入保存',
+      isReview: true,
     };
   }
 
   return {
-    label: '手动收藏',
+    label: '手动编辑',
     color: 'bg-indigo-100 text-indigo-700',
     icon: Star,
-    detail: customTag ? `来自「${customTag}」场景收藏` : '接诊沟通中收藏',
+    detail: '手动编辑保存',
+    isReview: false,
   };
+}
+
+function matchesSourceFilter(speech: PersonalSpeech, filter: SourceFilter): boolean {
+  if (filter === 'all') return true;
+  if (filter === 'review_all') {
+    return speech.source === 'review_auto' || speech.source === 'review_manual';
+  }
+  return speech.source === filter;
 }
 
 export function SpeechLibrary() {
@@ -119,18 +166,12 @@ export function SpeechLibrary() {
   const categories = [...new Set(personalSpeeches.map((s) => s.category))];
 
   const filteredSpeeches = personalSpeeches
+    .filter((s) => matchesSourceFilter(s, filterSource))
     .filter((s) => !filterCategory || s.category === filterCategory)
-    .filter((s) => {
-      if (filterSource === 'all') return true;
-      if (filterSource === 'auto') return getSpeechSource(s.tags) === 'auto';
-      if (filterSource === 'manual') return getSpeechSource(s.tags) === 'manual';
-      if (filterSource === 'review') return s.tags.includes('顺利复盘') || s.tags.some((t) => commonStuckPoints.includes(t));
-      return true;
-    })
     .filter((s) => {
       if (!searchKeyword.trim()) return true;
       const kw = searchKeyword.toLowerCase();
-      const sourceInfo = getSourceInfo(s.tags);
+      const sourceInfo = getSourceInfo(s);
       return (
         s.content.toLowerCase().includes(kw) ||
         s.tags.some((t) => t.toLowerCase().includes(kw)) ||
@@ -165,9 +206,11 @@ export function SpeechLibrary() {
 
   const saveEdit = () => {
     if (editingId && editContent.trim()) {
+      const originalSpeech = personalSpeeches.find((s) => s.id === editingId);
       updatePersonalSpeech(editingId, {
         content: editContent.trim(),
         category: editCategory,
+        tags: originalSpeech?.tags || [],
       });
       setEditingId(null);
       setEditContent('');
@@ -228,19 +271,22 @@ export function SpeechLibrary() {
             <div>
               <p className="text-xs text-gray-500 mb-2">来源筛选</p>
               <div className="flex gap-2 flex-wrap">
-                {(Object.keys(sourceLabels) as SourceFilter[]).map((src) => (
-                  <button
-                    key={src}
-                    onClick={() => setFilterSource(filterSource === src ? 'all' : src)}
-                    className={`px-3 py-1 text-xs rounded-md transition-colors ${
-                      filterSource === src
-                        ? 'bg-blue-500 text-white'
-                        : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
-                    }`}
-                  >
-                    {sourceLabels[src]}
-                  </button>
-                ))}
+                {sourceFilterOptions.map((opt) => {
+                  const Icon = opt.icon;
+                  const isActive = filterSource === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      onClick={() => setFilterSource(filterSource === opt.value ? 'all' : opt.value)}
+                      className={`flex items-center gap-1.5 px-3 py-1 text-xs rounded-md transition-all ${
+                        isActive ? opt.color : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+                      }`}
+                    >
+                      <Icon className="w-3 h-3" />
+                      {opt.label}
+                    </button>
+                  );
+                })}
               </div>
             </div>
             <div>
@@ -289,131 +335,133 @@ export function SpeechLibrary() {
       {filteredSpeeches.length > 0 ? (
         <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
           {filteredSpeeches.map((speech) => {
-            const sourceInfo = getSourceInfo(speech.tags);
-            const SourceIcon = sourceInfo.icon;
-            return (
-              <div
-                key={speech.id}
-                className={`group p-3 rounded-xl border transition-all duration-200 ${
-                  editingId === speech.id
-                    ? 'bg-blue-50 border-blue-300'
-                    : 'bg-gray-50 hover:bg-blue-50 hover:border-blue-200 border-transparent'
-                }`}
-              >
-                {editingId === speech.id ? (
-                  <div className="space-y-2">
-                    <textarea
-                      value={editContent}
-                      onChange={(e) => setEditContent(e.target.value)}
-                      rows={3}
-                      className="w-full px-3 py-2 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none bg-white"
-                    />
-                    <div className="flex gap-2 flex-wrap">
-                      {allCategories.map(([value, label]) => (
-                        <button
-                          key={value}
-                          onClick={() => setEditCategory(value)}
-                          className={`px-2 py-0.5 text-xs rounded-md transition-colors ${
-                            editCategory === value
-                              ? 'bg-blue-500 text-white'
-                              : 'bg-gray-100 text-gray-500'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="flex gap-2 justify-end">
+          const sourceInfo = getSourceInfo(speech);
+          const SourceIcon = sourceInfo.icon;
+          return (
+            <div
+              key={speech.id}
+              className={`group p-3 rounded-xl border transition-all duration-200 ${
+                editingId === speech.id
+                  ? 'bg-blue-50 border-blue-300'
+                  : 'bg-gray-50 hover:bg-blue-50 hover:border-blue-200 border-transparent'
+              }`}
+            >
+              {editingId === speech.id ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={editContent}
+                    onChange={(e) => setEditContent(e.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-2 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none bg-white"
+                  />
+                  <div className="flex gap-2 flex-wrap">
+                    {allCategories.map(([value, label]) => (
                       <button
-                        onClick={cancelEdit}
-                        className="px-3 py-1.5 text-xs text-gray-500 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                        key={value}
+                        onClick={() => setEditCategory(value)}
+                        className={`px-2 py-0.5 text-xs rounded-md transition-colors ${
+                          editCategory === value
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-gray-100 text-gray-500'
+                        }`}
                       >
-                        取消
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      onClick={cancelEdit}
+                      className="px-3 py-1.5 text-xs text-gray-500 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    >
+                      取消
+                    </button>
+                    <button
+                      onClick={saveEdit}
+                      className="px-3 py-1.5 text-xs text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-1"
+                    >
+                      <Save className="w-3 h-3" />
+                      保存
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm text-gray-700 flex-1 leading-relaxed">{speech.content}</p>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {copiedId === speech.id ? (
+                        <span className="text-xs text-emerald-600 flex items-center gap-1">
+                          <Check className="w-3 h-3" />
+                          已复制
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleCopy(speech.content, speech.id)}
+                          className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => startEdit(speech.id, speech.content, speech.category)}
+                        className="p-1.5 text-gray-400 hover:text-amber-500 hover:bg-amber-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                      >
+                        <Pencil className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={saveEdit}
-                        className="px-3 py-1.5 text-xs text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-1"
+                        onClick={() => deletePersonalSpeech(speech.id)}
+                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
                       >
-                        <Save className="w-3 h-3" />
-                        保存
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
-                ) : (
-                  <>
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="text-sm text-gray-700 flex-1 leading-relaxed">{speech.content}</p>
-                      <div className="flex items-center gap-1 flex-shrink-0">
-                        {copiedId === speech.id ? (
-                          <span className="text-xs text-emerald-600 flex items-center gap-1">
-                            <Check className="w-3 h-3" />
-                            已复制
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => handleCopy(speech.content, speech.id)}
-                            className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                          >
-                            <Copy className="w-4 h-4" />
-                          </button>
-                        )}
-                        <button
-                          onClick={() => startEdit(speech.id, speech.content, speech.category)}
-                          className="p-1.5 text-gray-400 hover:text-amber-500 hover:bg-amber-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-white text-xs text-gray-500 rounded-md">
+                      <Tag className="w-3 h-3" />
+                      {categoryLabels[speech.category] || speech.category}
+                    </span>
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md ${sourceInfo.color}`}
+                      title={sourceInfo.detail}
+                    >
+                      <SourceIcon className="w-3 h-3" />
+                      {sourceInfo.label}
+                    </span>
+                    {speech.tags
+                      .filter(
+                        (t) =>
+                          t &&
+                          t !== speech.category &&
+                          t !== '自动沉淀' &&
+                          t !== '手动沉淀' &&
+                          t !== '自定义卡点' &&
+                          t !== '预设卡点' &&
+                          t !== '顺利复盘' &&
+                          t !== '接诊收藏' &&
+                          !commonStuckPoints.includes(t) &&
+                          !['toothache', 'missing_tooth', 'malocclusion', 'cleaning', 'adult', 'child', 'teen', 'senior', 'low', 'medium', 'high'].includes(t)
+                      )
+                      .slice(0, 2)
+                      .map((tag) => (
+                        <span
+                          key={tag}
+                          className="px-2 py-0.5 bg-gray-100 text-xs text-gray-500 rounded-md"
                         >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => deletePersonalSpeech(speech.id)}
-                          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-white text-xs text-gray-500 rounded-md">
-                        <Tag className="w-3 h-3" />
-                        {categoryLabels[speech.category] || speech.category}
-                      </span>
-                      <span
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md ${sourceInfo.color}`}
-                        title={sourceInfo.detail}
-                      >
-                        <SourceIcon className="w-3 h-3" />
-                        {sourceInfo.label}
-                      </span>
-                      {speech.tags
-                        .filter(
-                          (t) =>
-                            t &&
-                            t !== speech.category &&
-                            t !== '自动沉淀' &&
-                            t !== '手动沉淀' &&
-                            t !== '自定义卡点' &&
-                            t !== '预设卡点' &&
-                            t !== '顺利复盘' &&
-                            !commonStuckPoints.includes(t)
-                        )
-                        .slice(0, 2)
-                        .map((tag) => (
-                          <span
-                            key={tag}
-                            className="px-2 py-0.5 bg-gray-100 text-xs text-gray-500 rounded-md"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      <span className="text-xs text-gray-400 ml-auto">{formatDate(speech.createdAt)}</span>
-                    </div>
-                    <div className="mt-1.5 pl-1">
-                      <p className="text-xs text-gray-400">{sourceInfo.detail}</p>
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          })}
+                          {tag}
+                        </span>
+                      ))}
+                    <span className="text-xs text-gray-400 ml-auto">{formatDate(speech.createdAt)}</span>
+                  </div>
+                  <div className="mt-1.5 pl-1">
+                    <p className="text-xs text-gray-400">{sourceInfo.detail}</p>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
         </div>
       ) : (
         <div className="text-center py-8">

@@ -2,6 +2,7 @@
 import { RotateCcw } from 'lucide-react';
 import { ReviewForm } from '@/components/review/ReviewForm';
 import { SpeechLibrary } from '@/components/review/SpeechLibrary';
+import { ReviewHistory } from '@/components/review/ReviewHistory';
 
 export function ReviewPage() {
   return (
@@ -12,8 +13,11 @@ export function ReviewPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <ReviewForm />
         <div className="space-y-6">
+          <ReviewForm />
+        </div>
+        <div className="space-y-6">
+          <ReviewHistory />
           <SpeechLibrary />
         </div>
       </div>

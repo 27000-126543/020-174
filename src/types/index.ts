@@ -45,6 +45,8 @@ export interface PersonalSpeech {
   category: string;
   tags: string[];
   createdAt: number;
+  source?: 'consult_collect' | 'review_manual' | 'review_auto' | 'manual_edit';
+  reviewId?: string;
 }
 
 export interface ReviewRecord {
@@ -52,6 +54,16 @@ export interface ReviewRecord {
   isSmooth: boolean;
   stuckPoint: string;
   speechContent: string;
+  createdAt: number;
+  speechIds?: string[];
+}
+
+export interface FavoriteComparison {
+  id: string;
+  treatmentA: TreatmentType;
+  treatmentB: TreatmentType;
+  name: string;
+  note: string;
   createdAt: number;
 }
 
