@@ -1,5 +1,5 @@
 
-import { Smile, CircleOff, AlignVerticalDistributeCenter, Sparkles } from 'lucide-react';
+import { Smile, CircleOff, AlignVerticalDistributeCenter, Sparkles, MoreHorizontal } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import type { ChiefComplaintType } from '@/types';
 import { chiefComplaintOptions } from '@/data/speeches';
@@ -9,6 +9,7 @@ const iconMap: Record<ChiefComplaintType, typeof Smile> = {
   missing_tooth: CircleOff,
   malocclusion: AlignVerticalDistributeCenter,
   cleaning: Sparkles,
+  other: MoreHorizontal,
 };
 
 export function ComplaintSelector() {

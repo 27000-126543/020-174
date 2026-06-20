@@ -1,7 +1,9 @@
 
 import { useState, useMemo } from 'react';
-import { ThumbsUp, ThumbsDown, AlertCircle, Save, Check, Sparkles } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, AlertCircle, Save, Check, Sparkles, User, Stethoscope, Heart } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
+import type { ChiefComplaintType, TreatmentType } from '@/types';
+import { chiefComplaintLabels, treatmentLabels, concernOptions } from '@/types';
 
 const stuckPointOptions = [
   '费用太贵',
@@ -54,6 +56,9 @@ const autoSpeechMap: Record<string, string[]> = {
   ],
 };
 
+const chiefComplaintOptions = Object.entries(chiefComplaintLabels) as [ChiefComplaintType, string][];
+const treatmentItemOptions = Object.entries(treatmentLabels) as [TreatmentType, string][];
+
 export function ReviewForm() {
   const [isSmooth, setIsSmooth] = useState<boolean | null>(null);
   const [selectedStuckPoints, setSelectedStuckPoints] = useState<string[]>([]);
@@ -63,12 +68,28 @@ export function ReviewForm() {
   const [saved, setSaved] = useState(false);
   const [showAutoSpeech, setShowAutoSpeech] = useState(false);
 
+  const [chiefComplaint, setChiefComplaint] = useState<ChiefComplaintType | null>(null);
+  const [treatmentItems, setTreatmentItems] = useState<TreatmentType[]>([]);
+  const [patientConcerns, setPatientConcerns] = useState<string[]>([]);
+
   const addReviewRecord = useAppStore((state) => state.addReviewRecord);
   const addPersonalSpeech = useAppStore((state) => state.addPersonalSpeech);
 
   const toggleStuckPoint = (point: string) => {
     setSelectedStuckPoints((prev) =>
       prev.includes(point) ? prev.filter((p) => p !== point) : [...prev, point]
+    );
+  };
+
+  const toggleTreatmentItem = (item: TreatmentType) => {
+    setTreatmentItems((prev) =>
+      prev.includes(item) ? prev.filter((i) => i !== item) : [...prev, item]
+    );
+  };
+
+  const toggleConcern = (concern: string) => {
+    setPatientConcerns((prev) =>
+      prev.includes(concern) ? prev.filter((c) => c !== concern) : [...prev, concern]
     );
   };
 
@@ -147,6 +168,9 @@ export function ReviewForm() {
       stuckPoint: allStuckPoints.filter((p) => p !== '其他').join('、'),
       speechContent,
       speechIds,
+      chiefComplaint: chiefComplaint || undefined,
+      treatmentItems: treatmentItems.length > 0 ? treatmentItems : undefined,
+      patientConcerns: patientConcerns.length > 0 ? patientConcerns : undefined,
     });
 
     setSaved(true);
@@ -157,6 +181,9 @@ export function ReviewForm() {
       setCustomStuckPoint('');
       setSpeechContent('');
       setShowAutoSpeech(false);
+      setChiefComplaint(null);
+      setTreatmentItems([]);
+      setPatientConcerns([]);
     }, 1500);
   };
 
@@ -168,6 +195,79 @@ export function ReviewForm() {
       </h3>
 
       <div className="space-y-6">
+        <div className="bg-blue-50 rounded-xl p-4 border border-blue-100">
+          <p className="text-sm text-blue-700 mb-3 flex items-center gap-1.5">
+            <User className="w-4 h-4" />
+            沟通背景（可选，方便后续归档查找）
+          </p>
+          <div className="space-y-4">
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-2 block">患者主诉</label>
+              <div className="flex flex-wrap gap-1.5">
+                {chiefComplaintOptions.map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() => setChiefComplaint(chiefComplaint === value ? null : value)}
+                    className={`px-2.5 py-1 text-xs rounded-md transition-all ${
+                      chiefComplaint === value
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-white text-gray-600 border border-gray-200 hover:border-blue-300'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-2 block">
+                <span className="flex items-center gap-1">
+                  <Stethoscope className="w-3.5 h-3.5" />
+                  涉及治疗项目（可多选）
+                </span>
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {treatmentItemOptions.map(([value, label]) => (
+                  <button
+                    key={value}
+                    onClick={() => toggleTreatmentItem(value)}
+                    className={`px-2.5 py-1 text-xs rounded-md transition-all ${
+                      treatmentItems.includes(value)
+                        ? 'bg-teal-500 text-white'
+                        : 'bg-white text-gray-600 border border-gray-200 hover:border-teal-300'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600 mb-2 block">
+                <span className="flex items-center gap-1">
+                  <Heart className="w-3.5 h-3.5" />
+                  患者关心点（可多选）
+                </span>
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {concernOptions.map((concern) => (
+                  <button
+                    key={concern}
+                    onClick={() => toggleConcern(concern)}
+                    className={`px-2.5 py-1 text-xs rounded-md transition-all ${
+                      patientConcerns.includes(concern)
+                        ? 'bg-rose-500 text-white'
+                        : 'bg-white text-gray-600 border border-gray-200 hover:border-rose-300'
+                    }`}
+                  >
+                    {concern}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div>
           <label className="text-sm font-medium text-gray-700 mb-3 block">沟通是否顺利？</label>
           <div className="flex gap-3">

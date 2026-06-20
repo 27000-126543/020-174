@@ -2,31 +2,30 @@
 import { create } from 'zustand';
 import type { TabType, ChiefComplaintType, PatientAttributes, PersonalSpeech, ReviewRecord, FavoriteComparison } from '@/types';
 
-interface AppState {
-  activeTab: TabType;
-  setActiveTab: (tab: TabType) => void;
-  selectedComplaint: ChiefComplaintType | null;
-  setSelectedComplaint: (type: ChiefComplaintType | null) => void;
-  patientAttributes: PatientAttributes;
-  setPatientAttributes: (attrs: Partial<PatientAttributes>) => void;
-  personalSpeeches: PersonalSpeech[];
-  addPersonalSpeech: (speech: Omit<PersonalSpeech, 'id' | 'createdAt'>) => string;
-  updatePersonalSpeech: (id: string, updates: Partial<Pick<PersonalSpeech, 'content' | 'category' | 'tags'>>) => void;
-  deletePersonalSpeech: (id: string) => void;
-  reviewRecords: ReviewRecord[];
-  addReviewRecord: (record: Omit<ReviewRecord, 'id' | 'createdAt' | 'speechIds'> & { speechIds?: string[] }) => string;
-  comparisonNotes: Record<string, string>;
-  setComparisonNote: (pairKey: string, note: string) => void;
-  favoriteComparisons: FavoriteComparison[];
-  addFavoriteComparison: (comp: Omit<FavoriteComparison, 'id' | 'createdAt'>) => void;
-  deleteFavoriteComparison: (id: string) => void;
-  updateFavoriteComparison: (id: string, updates: Partial<FavoriteComparison>) => void;
+function inferSourceFromTags(tags: string[]): PersonalSpeech['source'] {
+  if (tags.includes('接诊收藏')) return 'consult_collect';
+  if (tags.includes('手动沉淀')) return 'review_manual';
+  if (tags.includes('自动沉淀')) return 'review_auto';
+  return 'manual_edit';
+}
+
+function migratePersonalSpeech(speech: PersonalSpeech): PersonalSpeech {
+  return {
+    ...speech,
+    updatedAt: speech.updatedAt || speech.createdAt,
+    source: speech.source || inferSourceFromTags(speech.tags),
+  };
 }
 
 const loadFromStorage = <T>(key: string, defaultValue: T): T => {
   try {
     const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : defaultValue;
+    if (!item) return defaultValue;
+    const parsed = JSON.parse(item);
+    if (key === 'personalSpeeches' && Array.isArray(parsed)) {
+      return parsed.map(migratePersonalSpeech) as T;
+    }
+    return parsed;
   } catch {
     return defaultValue;
   }
@@ -40,7 +39,32 @@ const saveToStorage = (key: string, value: unknown) => {
   }
 };
 
-export const useAppStore = create<AppState>((set) => ({
+interface AppState {
+  activeTab: TabType;
+  setActiveTab: (tab: TabType) => void;
+  selectedComplaint: ChiefComplaintType | null;
+  setSelectedComplaint: (type: ChiefComplaintType | null) => void;
+  patientAttributes: PatientAttributes;
+  setPatientAttributes: (attrs: Partial<PatientAttributes>) => void;
+  personalSpeeches: PersonalSpeech[];
+  addPersonalSpeech: (speech: Omit<PersonalSpeech, 'id' | 'createdAt' | 'updatedAt'> & { reviewId?: string }) => string;
+  updatePersonalSpeech: (id: string, updates: Partial<Pick<PersonalSpeech, 'content' | 'category' | 'tags'>>) => void;
+  deletePersonalSpeech: (id: string) => void;
+  batchUpdateCategory: (ids: string[], category: string) => void;
+  addTagToSpeeches: (ids: string[], tag: string) => void;
+  removeTagFromSpeech: (id: string, tag: string) => void;
+  reviewRecords: ReviewRecord[];
+  addReviewRecord: (record: Omit<ReviewRecord, 'id' | 'createdAt'>) => string;
+  comparisonNotes: Record<string, string>;
+  setComparisonNote: (pairKey: string, note: string) => void;
+  getComparisonNote: (treatmentA: string, treatmentB: string) => string;
+  favoriteComparisons: FavoriteComparison[];
+  addFavoriteComparison: (comp: Omit<FavoriteComparison, 'id' | 'createdAt'>) => void;
+  deleteFavoriteComparison: (id: string) => void;
+  updateFavoriteComparison: (id: string, updates: Partial<FavoriteComparison>) => void;
+}
+
+export const useAppStore = create<AppState>((set, get) => ({
   activeTab: 'consultation',
   setActiveTab: (tab) => set({ activeTab: tab }),
 
@@ -60,10 +84,12 @@ export const useAppStore = create<AppState>((set) => ({
   personalSpeeches: loadFromStorage('personalSpeeches', []),
   addPersonalSpeech: (speech) => {
     const id = Math.random().toString(36).substring(2, 11);
+    const now = Date.now();
     const newSpeech: PersonalSpeech = {
       ...speech,
       id,
-      createdAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
     };
     set((state) => {
       const updated = [...state.personalSpeeches, newSpeech];
@@ -81,7 +107,35 @@ export const useAppStore = create<AppState>((set) => ({
   updatePersonalSpeech: (id, updates) =>
     set((state) => {
       const updated = state.personalSpeeches.map((s) =>
-        s.id === id ? { ...s, ...updates } : s
+        s.id === id ? { ...s, ...updates, updatedAt: Date.now() } : s
+      );
+      saveToStorage('personalSpeeches', updated);
+      return { personalSpeeches: updated };
+    }),
+  batchUpdateCategory: (ids, category) =>
+    set((state) => {
+      const updated = state.personalSpeeches.map((s) =>
+        ids.includes(s.id) ? { ...s, category, updatedAt: Date.now() } : s
+      );
+      saveToStorage('personalSpeeches', updated);
+      return { personalSpeeches: updated };
+    }),
+  addTagToSpeeches: (ids, tag) =>
+    set((state) => {
+      const updated = state.personalSpeeches.map((s) =>
+        ids.includes(s.id) && !s.tags.includes(tag)
+          ? { ...s, tags: [...s.tags, tag], updatedAt: Date.now() }
+          : s
+      );
+      saveToStorage('personalSpeeches', updated);
+      return { personalSpeeches: updated };
+    }),
+  removeTagFromSpeech: (id, tag) =>
+    set((state) => {
+      const updated = state.personalSpeeches.map((s) =>
+        s.id === id
+          ? { ...s, tags: s.tags.filter((t) => t !== tag), updatedAt: Date.now() }
+          : s
       );
       saveToStorage('personalSpeeches', updated);
       return { personalSpeeches: updated };
@@ -96,6 +150,17 @@ export const useAppStore = create<AppState>((set) => ({
       createdAt: Date.now(),
       speechIds: record.speechIds || [],
     };
+
+    if (newRecord.speechIds && newRecord.speechIds.length > 0) {
+      set((state) => {
+        const updatedSpeeches = state.personalSpeeches.map((s) =>
+          newRecord.speechIds!.includes(s.id) ? { ...s, reviewId: id, updatedAt: Date.now() } : s
+        );
+        saveToStorage('personalSpeeches', updatedSpeeches);
+        return { personalSpeeches: updatedSpeeches };
+      });
+    }
+
     set((state) => {
       const updated = [...state.reviewRecords, newRecord];
       saveToStorage('reviewRecords', updated);
@@ -107,10 +172,22 @@ export const useAppStore = create<AppState>((set) => ({
   comparisonNotes: loadFromStorage('comparisonNotes', {}),
   setComparisonNote: (pairKey, note) =>
     set((state) => {
-      const updated = { ...state.comparisonNotes, [pairKey]: note };
+      const [a, b] = pairKey.split(' vs ');
+      const reverseKey = `${b} vs ${a}`;
+      const updated = {
+        ...state.comparisonNotes,
+        [pairKey]: note,
+        [reverseKey]: note,
+      };
       saveToStorage('comparisonNotes', updated);
       return { comparisonNotes: updated };
     }),
+  getComparisonNote: (treatmentA, treatmentB) => {
+    const state = get();
+    const key1 = `${treatmentA} vs ${treatmentB}`;
+    const key2 = `${treatmentB} vs ${treatmentA}`;
+    return state.comparisonNotes[key1] || state.comparisonNotes[key2] || '';
+  },
 
   favoriteComparisons: loadFromStorage('favoriteComparisons', []),
   addFavoriteComparison: (comp) =>

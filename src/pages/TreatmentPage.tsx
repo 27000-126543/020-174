@@ -1,5 +1,5 @@
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   FileText,
   AlertCircle,
@@ -11,8 +11,12 @@ import {
   Check,
   Bookmark,
   X,
+  Sparkles,
+  Copy,
+  User,
+  MessageCircle,
 } from 'lucide-react';
-import type { TreatmentType } from '@/types';
+import type { TreatmentType, TreatmentCard } from '@/types';
 import { treatmentCards } from '@/data/treatments';
 import { TreatmentSelector } from '@/components/treatment/TreatmentSelector';
 import { TreatmentCardComponent } from '@/components/treatment/TreatmentCard';
@@ -20,6 +24,43 @@ import { TreatmentComparison } from '@/components/treatment/TreatmentComparison'
 import { useAppStore } from '@/store/useAppStore';
 
 type ViewMode = 'single' | 'compare';
+
+function generatePatientSummary(cardA: TreatmentCard, cardB: TreatmentCard, note: string) {
+  const lines: string[] = [];
+
+  lines.push(`您好，关于「${cardA.name}」和「${cardB.name}」这两种方案，我给您简单总结一下：`);
+  lines.push('');
+
+  lines.push('【费用情况】');
+  lines.push(`• ${cardA.name}：${cardA.costBreakdown.slice(0, 2).join('；')}`);
+  lines.push(`• ${cardB.name}：${cardB.costBreakdown.slice(0, 2).join('；')}`);
+  lines.push('');
+
+  lines.push('【治疗次数和时间】');
+  lines.push(`• ${cardA.name}：${cardA.treatmentSessions}`);
+  lines.push(`• ${cardB.name}：${cardB.treatmentSessions}`);
+  lines.push('');
+
+  lines.push('【治疗感受】');
+  lines.push(`• ${cardA.name}：${cardA.possibleDiscomfort.slice(0, 2).join('、') || '不适感轻微'}`);
+  lines.push(`• ${cardB.name}：${cardB.possibleDiscomfort.slice(0, 2).join('、') || '不适感轻微'}`);
+  lines.push('');
+
+  lines.push('【后续复诊】');
+  lines.push(`• ${cardA.name}：${cardA.followUpRequirement.slice(0, 2).join('；')}`);
+  lines.push(`• ${cardB.name}：${cardB.followUpRequirement.slice(0, 2).join('；')}`);
+  lines.push('');
+
+  if (note.trim()) {
+    lines.push('【我特别提醒您注意】');
+    lines.push(`• ${note.trim().split('\n').filter(l => l.trim()).slice(0, 3).join('\n• ')}`);
+    lines.push('');
+  }
+
+  lines.push('您可以根据自己的情况和需求来选择，有任何疑问都可以随时问我。');
+
+  return lines.join('\n');
+}
 
 export function TreatmentPage() {
   const [selectedTreatment, setSelectedTreatment] = useState<TreatmentType | null>(null);
@@ -31,8 +72,10 @@ export function TreatmentPage() {
   const [showFavorites, setShowFavorites] = useState(false);
   const [newFavName, setNewFavName] = useState('');
   const [showAddFavInput, setShowAddFavInput] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+  const [copiedSummary, setCopiedSummary] = useState(false);
 
-  const comparisonNotes = useAppStore((state) => state.comparisonNotes);
+  const getComparisonNote = useAppStore((state) => state.getComparisonNote);
   const setComparisonNote = useAppStore((state) => state.setComparisonNote);
   const favoriteComparisons = useAppStore((state) => state.favoriteComparisons);
   const addFavoriteComparison = useAppStore((state) => state.addFavoriteComparison);
@@ -44,26 +87,31 @@ export function TreatmentPage() {
   const cardA = treatmentCards.find((c) => c.type === compareA);
   const cardB = treatmentCards.find((c) => c.type === compareB);
 
-  const pairKey = compareA && compareB ? `${compareA}__${compareB}` : '';
-  const reversePairKey = compareA && compareB ? `${compareB}__${compareA}` : '';
+  const patientSummary = useMemo(() => {
+    if (cardA && cardB) {
+      return generatePatientSummary(cardA, cardB, currentNote);
+    }
+    return '';
+  }, [cardA, cardB, currentNote]);
 
   useEffect(() => {
-    if (pairKey) {
-      const existingNote = comparisonNotes[pairKey] || comparisonNotes[reversePairKey] || '';
+    if (compareA && compareB) {
+      const existingNote = getComparisonNote(compareA, compareB);
       setCurrentNote(existingNote);
     } else {
       setCurrentNote('');
     }
-  }, [pairKey, reversePairKey]);
+  }, [compareA, compareB, getComparisonNote]);
 
   useEffect(() => {
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
     }
-    if (!pairKey) return;
+    if (!compareA || !compareB) return;
 
     setSavingStatus('saving');
     saveTimerRef.current = setTimeout(() => {
+      const pairKey = `${compareA} vs ${compareB}`;
       setComparisonNote(pairKey, currentNote);
       setSavingStatus('saved');
       setTimeout(() => setSavingStatus('idle'), 1000);
@@ -74,7 +122,7 @@ export function TreatmentPage() {
         clearTimeout(saveTimerRef.current);
       }
     };
-  }, [currentNote, pairKey]);
+  }, [currentNote, compareA, compareB, setComparisonNote]);
 
   const handleSelectSingle = (type: TreatmentType | null) => {
     setSelectedTreatment(type);
@@ -119,6 +167,16 @@ export function TreatmentPage() {
     setCompareA(fav.treatmentA);
     setCompareB(fav.treatmentB);
     setSelectedTreatment(fav.treatmentA);
+  };
+
+  const handleCopySummary = async () => {
+    try {
+      await navigator.clipboard.writeText(patientSummary);
+      setCopiedSummary(true);
+      setTimeout(() => setCopiedSummary(false), 1500);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
   };
 
   const isCurrentFavorite = favoriteComparisons.some(
@@ -174,7 +232,10 @@ export function TreatmentPage() {
             </h3>
             {canCompare && !showAddFavInput && (
               <button
-                onClick={() => setShowAddFavInput(true)}
+                onClick={() => {
+                  setShowFavorites(true);
+                  setShowAddFavInput(true);
+                }}
                 className="flex items-center gap-1 px-2 py-1 text-xs text-amber-600 bg-amber-50 rounded-md hover:bg-amber-100 transition-colors"
               >
                 <Plus className="w-3 h-3" />
@@ -322,15 +383,26 @@ export function TreatmentPage() {
             <textarea
               value={currentNote}
               onChange={(e) => setCurrentNote(e.target.value)}
-              placeholder={`记录患者对「${cardA.name}」和「${cardB.name}」最关心的问题、顾虑点、讲解重点等...\n\n💡 输入会自动保存，无需手动点击保存按钮`}
+              placeholder={`记录患者对「${cardA.name}」和「${cardB.name}」最关心的问题、顾虑点、讲解重点等...\n\n💡 输入会自动保存，正反序共用同一份备注（如${cardA.name}vs${cardB.name}和${cardB.name}vs${cardA.name}）`}
               rows={5}
               className="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-400 resize-none"
             />
             <div className="flex items-center justify-between mt-2">
               <p className="text-xs text-gray-400">
-                ✨ 边写边存，切换项目组合、刷新页面都不会丢失
+                ✨ 边写边存，正反序切换、更换组合、刷新页面都不会丢失
               </p>
               <div className="flex gap-2">
+                <button
+                  onClick={() => setShowSummary(!showSummary)}
+                  className={`flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                    showSummary
+                      ? 'bg-emerald-500 text-white'
+                      : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                  }`}
+                >
+                  <Sparkles className="w-3 h-3" />
+                  {showSummary ? '收起摘要' : '生成患者版摘要'}
+                </button>
                 {!isCurrentFavorite ? (
                   <button
                     onClick={() => {
@@ -351,6 +423,45 @@ export function TreatmentPage() {
               </div>
             </div>
           </div>
+
+          {showSummary && (
+            <div className="bg-emerald-50 rounded-2xl p-5 shadow-sm border border-emerald-100 animate-fade-in">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                  <User className="w-4 h-4 text-emerald-500" />
+                  患者版讲解摘要
+                  <span className="text-xs text-gray-400 font-normal">
+                    （可直接复制发给患者）
+                  </span>
+                </h3>
+                <button
+                  onClick={handleCopySummary}
+                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors"
+                >
+                  {copiedSummary ? (
+                    <>
+                      <Check className="w-3 h-3" />
+                      已复制
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3 h-3" />
+                      一键复制
+                    </>
+                  )}
+                </button>
+              </div>
+              <div className="bg-white rounded-xl p-4 border border-emerald-100">
+                <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans leading-relaxed">
+                  {patientSummary}
+                </pre>
+              </div>
+              <p className="text-xs text-emerald-600 mt-2 flex items-center gap-1">
+                <MessageCircle className="w-3 h-3" />
+                💡 摘要自动整合了费用、次数、不适、复诊要求和您的备注，您可以根据患者情况微调后再发送
+              </p>
+            </div>
+          )}
         </div>
       ) : (
         <div className="bg-white rounded-2xl p-12 shadow-sm border border-gray-100 text-center">

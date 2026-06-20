@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Bookmark,
   Trash2,
@@ -15,8 +15,14 @@ import {
   RotateCcw,
   Filter,
   Heart,
-  History,
   Lightbulb,
+  Plus,
+  XCircle,
+  CheckSquare,
+  Square,
+  ArrowRight,
+  Clock,
+  History,
 } from 'lucide-react';
 import { useAppStore } from '@/store/useAppStore';
 import type { PersonalSpeech } from '@/types';
@@ -153,6 +159,10 @@ export function SpeechLibrary() {
   const personalSpeeches = useAppStore((state) => state.personalSpeeches);
   const deletePersonalSpeech = useAppStore((state) => state.deletePersonalSpeech);
   const updatePersonalSpeech = useAppStore((state) => state.updatePersonalSpeech);
+  const batchUpdateCategory = useAppStore((state) => state.batchUpdateCategory);
+  const addTagToSpeeches = useAppStore((state) => state.addTagToSpeeches);
+  const removeTagFromSpeech = useAppStore((state) => state.removeTagFromSpeech);
+  const reviewRecords = useAppStore((state) => state.reviewRecords);
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [filterCategory, setFilterCategory] = useState<string | null>(null);
@@ -162,8 +172,18 @@ export function SpeechLibrary() {
   const [editContent, setEditContent] = useState('');
   const [editCategory, setEditCategory] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showBatchBar, setShowBatchBar] = useState(false);
+  const [batchCategory, setBatchCategory] = useState('');
+  const [showBatchCategory, setShowBatchCategory] = useState(false);
+  const [addingTagToId, setAddingTagToId] = useState<string | null>(null);
+  const [newTagInput, setNewTagInput] = useState('');
+  const [showBatchTagInput, setShowBatchTagInput] = useState(false);
+  const [batchTagInput, setBatchTagInput] = useState('');
+  const [jumpToReviewId, setJumpToReviewId] = useState<string | null>(null);
 
   const categories = [...new Set(personalSpeeches.map((s) => s.category))];
+  const allTags = [...new Set(personalSpeeches.flatMap((s) => s.tags))];
 
   const filteredSpeeches = personalSpeeches
     .filter((s) => matchesSourceFilter(s, filterSource))
@@ -180,7 +200,12 @@ export function SpeechLibrary() {
         sourceInfo.detail.includes(kw)
       );
     })
-    .sort((a, b) => b.createdAt - a.createdAt);
+    .sort((a, b) => b.updatedAt - a.updatedAt);
+
+  const getReviewForSpeech = (reviewId?: string) => {
+    if (!reviewId) return null;
+    return reviewRecords.find((r) => r.id === reviewId) || null;
+  };
 
   const handleCopy = async (content: string, id: string) => {
     try {
@@ -190,6 +215,38 @@ export function SpeechLibrary() {
     } catch (err) {
       console.error('Failed to copy:', err);
     }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      setShowBatchBar(next.size > 0);
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (selectedIds.size === filteredSpeeches.length) {
+      setSelectedIds(new Set());
+      setShowBatchBar(false);
+    } else {
+      setSelectedIds(new Set(filteredSpeeches.map((s) => s.id)));
+      setShowBatchBar(true);
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+    setShowBatchBar(false);
+    setShowBatchCategory(false);
+    setBatchCategory('');
+    setShowBatchTagInput(false);
+    setBatchTagInput('');
   };
 
   const startEdit = (id: string, content: string, category: string) => {
@@ -218,13 +275,145 @@ export function SpeechLibrary() {
     }
   };
 
+  const handleBatchUpdateCategory = () => {
+    if (selectedIds.size > 0 && batchCategory) {
+      batchUpdateCategory([...selectedIds], batchCategory);
+      clearSelection();
+    }
+  };
+
+  const handleAddTag = (id: string) => {
+    if (newTagInput.trim()) {
+      addTagToSpeeches([id], newTagInput.trim());
+      setAddingTagToId(null);
+      setNewTagInput('');
+    }
+  };
+
+  const handleBatchAddTag = () => {
+    if (selectedIds.size > 0 && batchTagInput.trim()) {
+      addTagToSpeeches([...selectedIds], batchTagInput.trim());
+      clearSelection();
+    }
+  };
+
+  const handleRemoveTag = (id: string, tag: string) => {
+    removeTagFromSpeech(id, tag);
+  };
+
   const formatDate = (timestamp: number) => {
     const date = new Date(timestamp);
     return `${date.getMonth() + 1}月${date.getDate()}日`;
   };
 
+  const formatFullDate = (timestamp: number) => {
+    const date = new Date(timestamp);
+    return `${date.getFullYear()}年${date.getMonth() + 1}月${date.getDate()}日 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+  };
+
+  const handleJumpToReview = (reviewId: string) => {
+    setJumpToReviewId(reviewId);
+    setTimeout(() => {
+      setJumpToReviewId(null);
+    }, 2000);
+  };
+
   return (
-    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+    <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 relative">
+      {jumpToReviewId && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg text-sm z-20 animate-fade-in flex items-center gap-2">
+          <ArrowRight className="w-4 h-4" />
+          请在上方「复盘历史记录」中查看对应复盘
+        </div>
+      )}
+
+      {showBatchBar && (
+        <div className="mb-4 p-3 bg-blue-50 rounded-xl border border-blue-200 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-blue-700 font-medium">
+              已选 {selectedIds.size} 条
+            </span>
+            {!showBatchCategory && !showBatchTagInput && (
+              <>
+                <button
+                  onClick={() => setShowBatchCategory(true)}
+                  className="px-3 py-1 text-xs bg-white text-blue-600 rounded-md hover:bg-blue-50 border border-blue-200 transition-colors flex items-center gap-1"
+                >
+                  <Tag className="w-3 h-3" />
+                  批量改分类
+                </button>
+                <button
+                  onClick={() => setShowBatchTagInput(true)}
+                  className="px-3 py-1 text-xs bg-white text-emerald-600 rounded-md hover:bg-emerald-50 border border-emerald-200 transition-colors flex items-center gap-1"
+                >
+                  <Plus className="w-3 h-3" />
+                  批量加标签
+                </button>
+              </>
+            )}
+            {showBatchCategory && (
+              <div className="flex items-center gap-2">
+                <select
+                  value={batchCategory}
+                  onChange={(e) => setBatchCategory(e.target.value)}
+                  className="px-2 py-1 text-xs border border-blue-300 rounded-md bg-white"
+                >
+                  <option value="">选择分类</option>
+                  {allCategories.map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={handleBatchUpdateCategory}
+                  disabled={!batchCategory}
+                  className="px-2 py-1 text-xs bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors disabled:opacity-50 flex items-center gap-1"
+                >
+                  <Check className="w-3 h-3" />
+                  确定
+                </button>
+                <button
+                  onClick={() => { setShowBatchCategory(false); setBatchCategory(''); }}
+                  className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
+                >
+                  取消
+                </button>
+              </div>
+            )}
+            {showBatchTagInput && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={batchTagInput}
+                  onChange={(e) => setBatchTagInput(e.target.value)}
+                  placeholder="输入标签名称..."
+                  className="px-2 py-1 text-xs border border-emerald-300 rounded-md w-32"
+                />
+                <button
+                  onClick={handleBatchAddTag}
+                  disabled={!batchTagInput.trim()}
+                  className="px-2 py-1 text-xs bg-emerald-500 text-white rounded-md hover:bg-emerald-600 transition-colors disabled:opacity-50 flex items-center gap-1"
+                >
+                  <Check className="w-3 h-3" />
+                  确定
+                </button>
+                <button
+                  onClick={() => { setShowBatchTagInput(false); setBatchTagInput(''); }}
+                  className="px-2 py-1 text-xs text-gray-500 hover:text-gray-700"
+                >
+                  取消
+                </button>
+              </div>
+            )}
+          </div>
+          <button
+            onClick={clearSelection}
+            className="p-1 text-gray-400 hover:text-gray-600"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-base font-semibold text-gray-800 flex items-center gap-2">
           <span className="w-1 h-5 bg-blue-500 rounded-full"></span>
@@ -232,6 +421,21 @@ export function SpeechLibrary() {
         </h3>
         <div className="flex items-center gap-3">
           <span className="text-xs text-gray-400">{personalSpeeches.length} 条</span>
+          <button
+            onClick={selectAll}
+            className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors ${
+              selectedIds.size > 0
+                ? 'bg-blue-100 text-blue-600'
+                : 'text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            {selectedIds.size === filteredSpeeches.length && filteredSpeeches.length > 0 ? (
+              <CheckSquare className="w-3.5 h-3.5" />
+            ) : (
+              <Square className="w-3.5 h-3.5" />
+            )}
+            多选
+          </button>
           <button
             onClick={() => setShowFilters(!showFilters)}
             className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors ${
@@ -333,135 +537,220 @@ export function SpeechLibrary() {
       </div>
 
       {filteredSpeeches.length > 0 ? (
-        <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
+        <div className="space-y-2 max-h-[450px] overflow-y-auto pr-1">
           {filteredSpeeches.map((speech) => {
-          const sourceInfo = getSourceInfo(speech);
-          const SourceIcon = sourceInfo.icon;
-          return (
-            <div
-              key={speech.id}
-              className={`group p-3 rounded-xl border transition-all duration-200 ${
-                editingId === speech.id
-                  ? 'bg-blue-50 border-blue-300'
-                  : 'bg-gray-50 hover:bg-blue-50 hover:border-blue-200 border-transparent'
-              }`}
-            >
-              {editingId === speech.id ? (
-                <div className="space-y-2">
-                  <textarea
-                    value={editContent}
-                    onChange={(e) => setEditContent(e.target.value)}
-                    rows={3}
-                    className="w-full px-3 py-2 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none bg-white"
-                  />
-                  <div className="flex gap-2 flex-wrap">
-                    {allCategories.map(([value, label]) => (
-                      <button
-                        key={value}
-                        onClick={() => setEditCategory(value)}
-                        className={`px-2 py-0.5 text-xs rounded-md transition-colors ${
-                          editCategory === value
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-gray-100 text-gray-500'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex gap-2 justify-end">
+            const sourceInfo = getSourceInfo(speech);
+            const SourceIcon = sourceInfo.icon;
+            const isSelected = selectedIds.has(speech.id);
+            const review = getReviewForSpeech(speech.reviewId);
+            const hasBeenEdited = speech.updatedAt > speech.createdAt + 1000;
+
+            return (
+              <div
+                key={speech.id}
+                className={`group p-3 rounded-xl border transition-all duration-200 ${
+                  editingId === speech.id
+                    ? 'bg-blue-50 border-blue-300'
+                    : isSelected
+                    ? 'bg-blue-50 border-blue-300'
+                    : 'bg-gray-50 hover:bg-blue-50 hover:border-blue-200 border-transparent'
+                }`}
+              >
+                {showBatchBar && (
+                  <div className="absolute -left-2 -top-2">
                     <button
-                      onClick={cancelEdit}
-                      className="px-3 py-1.5 text-xs text-gray-500 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                      onClick={() => toggleSelect(speech.id)}
+                      className="p-0.5 bg-white rounded border border-blue-300"
                     >
-                      取消
-                    </button>
-                    <button
-                      onClick={saveEdit}
-                      className="px-3 py-1.5 text-xs text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-1"
-                    >
-                      <Save className="w-3 h-3" />
-                      保存
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="text-sm text-gray-700 flex-1 leading-relaxed">{speech.content}</p>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {copiedId === speech.id ? (
-                        <span className="text-xs text-emerald-600 flex items-center gap-1">
-                          <Check className="w-3 h-3" />
-                          已复制
-                        </span>
+                      {isSelected ? (
+                        <CheckSquare className="w-4 h-4 text-blue-500" />
                       ) : (
-                        <button
-                          onClick={() => handleCopy(speech.content, speech.id)}
-                          className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
-                        >
-                          <Copy className="w-4 h-4" />
-                        </button>
+                        <Square className="w-4 h-4 text-gray-300" />
                       )}
+                    </button>
+                  </div>
+                )}
+
+                {editingId === speech.id ? (
+                  <div className="space-y-2">
+                    <textarea
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      rows={3}
+                      className="w-full px-3 py-2 text-sm border border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 resize-none bg-white"
+                    />
+                    <div className="flex gap-2 flex-wrap">
+                      {allCategories.map(([value, label]) => (
+                        <button
+                          key={value}
+                          onClick={() => setEditCategory(value)}
+                          className={`px-2 py-0.5 text-xs rounded-md transition-colors ${
+                            editCategory === value
+                              ? 'bg-blue-500 text-white'
+                              : 'bg-gray-100 text-gray-500'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex gap-2 justify-end">
                       <button
-                        onClick={() => startEdit(speech.id, speech.content, speech.category)}
-                        className="p-1.5 text-gray-400 hover:text-amber-500 hover:bg-amber-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                        onClick={cancelEdit}
+                        className="px-3 py-1.5 text-xs text-gray-500 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
                       >
-                        <Pencil className="w-4 h-4" />
+                        取消
                       </button>
                       <button
-                        onClick={() => deletePersonalSpeech(speech.id)}
-                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                        onClick={saveEdit}
+                        className="px-3 py-1.5 text-xs text-white bg-blue-500 rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-1"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Save className="w-3 h-3" />
+                        保存
                       </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 mt-2 flex-wrap">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-white text-xs text-gray-500 rounded-md">
-                      <Tag className="w-3 h-3" />
-                      {categoryLabels[speech.category] || speech.category}
-                    </span>
-                    <span
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md ${sourceInfo.color}`}
-                      title={sourceInfo.detail}
-                    >
-                      <SourceIcon className="w-3 h-3" />
-                      {sourceInfo.label}
-                    </span>
-                    {speech.tags
-                      .filter(
-                        (t) =>
-                          t &&
-                          t !== speech.category &&
-                          t !== '自动沉淀' &&
-                          t !== '手动沉淀' &&
-                          t !== '自定义卡点' &&
-                          t !== '预设卡点' &&
-                          t !== '顺利复盘' &&
-                          t !== '接诊收藏' &&
-                          !commonStuckPoints.includes(t) &&
-                          !['toothache', 'missing_tooth', 'malocclusion', 'cleaning', 'adult', 'child', 'teen', 'senior', 'low', 'medium', 'high'].includes(t)
-                      )
-                      .slice(0, 2)
-                      .map((tag) => (
-                        <span
-                          key={tag}
-                          className="px-2 py-0.5 bg-gray-100 text-xs text-gray-500 rounded-md"
+                ) : (
+                  <>
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-sm text-gray-700 flex-1 leading-relaxed">{speech.content}</p>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {copiedId === speech.id ? (
+                          <span className="text-xs text-emerald-600 flex items-center gap-1">
+                            <Check className="w-3 h-3" />
+                            已复制
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => handleCopy(speech.content, speech.id)}
+                            className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <Copy className="w-4 h-4" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => startEdit(speech.id, speech.content, speech.category)}
+                          className="p-1.5 text-gray-400 hover:text-amber-500 hover:bg-amber-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
                         >
-                          {tag}
-                        </span>
-                      ))}
-                    <span className="text-xs text-gray-400 ml-auto">{formatDate(speech.createdAt)}</span>
-                  </div>
-                  <div className="mt-1.5 pl-1">
-                    <p className="text-xs text-gray-400">{sourceInfo.detail}</p>
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        })}
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => deletePersonalSpeech(speech.id)}
+                          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-100 rounded-lg opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-white text-xs text-gray-500 rounded-md">
+                        <Tag className="w-3 h-3" />
+                        {categoryLabels[speech.category] || speech.category}
+                      </span>
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-md ${sourceInfo.color}`}
+                        title={sourceInfo.detail}
+                      >
+                        <SourceIcon className="w-3 h-3" />
+                        {sourceInfo.label}
+                      </span>
+
+                      {speech.tags
+                        .filter(
+                          (t) =>
+                            t &&
+                            t !== speech.category &&
+                            t !== '自动沉淀' &&
+                            t !== '手动沉淀' &&
+                            t !== '自定义卡点' &&
+                            t !== '预设卡点' &&
+                            t !== '顺利复盘' &&
+                            t !== '接诊收藏' &&
+                            !commonStuckPoints.includes(t) &&
+                            !['toothache', 'missing_tooth', 'malocclusion', 'cleaning', 'adult', 'child', 'teen', 'senior', 'low', 'medium', 'high'].includes(t)
+                        )
+                        .map((tag) => (
+                          <span
+                            key={tag}
+                            className="group/tag inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-xs text-gray-600 rounded-md"
+                          >
+                            {tag}
+                            <button
+                              onClick={() => handleRemoveTag(speech.id, tag)}
+                              className="ml-0.5 text-gray-400 hover:text-red-500 opacity-0 group-hover/tag:opacity-100 transition-opacity"
+                            >
+                              <XCircle className="w-3 h-3" />
+                            </button>
+                          </span>
+                        ))}
+
+                      {addingTagToId === speech.id ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="text"
+                            value={newTagInput}
+                            onChange={(e) => setNewTagInput(e.target.value)}
+                            placeholder="新标签"
+                            className="px-2 py-0.5 text-xs border border-emerald-300 rounded-md w-20"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleAddTag(speech.id)}
+                            className="p-1 text-emerald-600 hover:bg-emerald-50 rounded"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => { setAddingTagToId(null); setNewTagInput(''); }}
+                            className="p-1 text-gray-400 hover:bg-gray-100 rounded"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setAddingTagToId(speech.id)}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 text-xs text-emerald-600 hover:bg-emerald-50 rounded-md opacity-0 group-hover:opacity-100 transition-all"
+                        >
+                          <Plus className="w-3 h-3" />
+                          加标签
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3 mt-1.5 pl-1 flex-wrap">
+                      <p className="text-xs text-gray-400">{sourceInfo.detail}</p>
+                      <div className="flex items-center gap-2 ml-auto">
+                        {hasBeenEdited && (
+                          <span className="inline-flex items-center gap-1 text-xs text-gray-400">
+                            <Clock className="w-3 h-3" />
+                            编辑于 {formatDate(speech.updatedAt)}
+                          </span>
+                        )}
+                        {!hasBeenEdited && (
+                          <span className="inline-flex items-center gap-1 text-xs text-gray-400">
+                            <Clock className="w-3 h-3" />
+                            {formatDate(speech.createdAt)}
+                          </span>
+                        )}
+                        {speech.reviewId && review && (
+                          <button
+                            onClick={() => handleJumpToReview(speech.reviewId!)}
+                            className="inline-flex items-center gap-1 text-xs text-blue-500 hover:text-blue-600"
+                          >
+                            <History className="w-3 h-3" />
+                            查看复盘
+                            <ArrowRight className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div className="text-center py-8">

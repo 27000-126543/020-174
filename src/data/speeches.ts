@@ -93,6 +93,26 @@ const baseSpeeches: Record<ChiefComplaintType, SpeechTemplate> = {
       '整个过程大概三四十分钟，您有不舒服就抬手告诉我。',
     ],
   },
+  other: {
+    greeting: [
+      '您好，请坐，我是您的主治医生。',
+      '很高兴为您服务，先请坐放松一下。',
+      '您今天主要是想解决什么问题呢？',
+    ],
+    medical_history: [
+      '您这种情况有多久了？',
+      '之前有没有去其他地方看过？做过什么治疗？',
+      '有没有什么特别担心或者在意的地方？',
+      '您身体怎么样？有没有什么慢性病或者药物过敏？',
+      '平时生活习惯怎么样？有没有抽烟喝酒？',
+    ],
+    pre_exam: [
+      '接下来我先帮您做个全面的口腔检查。',
+      '检查的时候有任何不舒服您就抬手告诉我。',
+      '等检查完我会跟您详细讲解情况和治疗方案。',
+      '有什么疑问随时可以问我，我们慢慢沟通。',
+    ],
+  },
 };
 
 const ageAdjustments: Record<AgeGroup, Partial<SpeechTemplate>> = {
@@ -182,6 +202,7 @@ export const chiefComplaintOptions: { type: ChiefComplaintType; label: string; i
   { type: 'missing_tooth', label: '缺牙', icon: 'circle-off' },
   { type: 'malocclusion', label: '牙齿不齐', icon: 'align-vertical-distribute-center' },
   { type: 'cleaning', label: '洗牙咨询', icon: 'sparkles' },
+  { type: 'other', label: '其他', icon: 'more-horizontal' },
 ];
 
 export const ageGroupOptions: { value: AgeGroup; label: string }[] = [

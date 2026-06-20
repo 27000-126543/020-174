@@ -1,5 +1,5 @@
 
-export type ChiefComplaintType = 'toothache' | 'missing_tooth' | 'malocclusion' | 'cleaning';
+export type ChiefComplaintType = 'toothache' | 'missing_tooth' | 'malocclusion' | 'cleaning' | 'other';
 
 export type AgeGroup = 'child' | 'teen' | 'adult' | 'senior';
 
@@ -27,7 +27,7 @@ export interface SpeechWithFeedback extends SpeechItem {
   usedCount: number;
 }
 
-export type TreatmentType = 'root_canal' | 'filling' | 'implant' | 'orthodontics' | 'removable_denture' | 'fixed_bridge';
+export type TreatmentType = 'root_canal' | 'filling' | 'implant' | 'orthodontics' | 'removable_denture' | 'fixed_bridge' | 'whitening' | 'scaling' | 'other';
 
 export interface TreatmentCard {
   type: TreatmentType;
@@ -45,6 +45,7 @@ export interface PersonalSpeech {
   category: string;
   tags: string[];
   createdAt: number;
+  updatedAt: number;
   source?: 'consult_collect' | 'review_manual' | 'review_auto' | 'manual_edit';
   reviewId?: string;
 }
@@ -56,6 +57,10 @@ export interface ReviewRecord {
   speechContent: string;
   createdAt: number;
   speechIds?: string[];
+  chiefComplaint?: ChiefComplaintType;
+  treatmentItems?: TreatmentType[];
+  patientConcerns?: string[];
+  patientAttributes?: PatientAttributes;
 }
 
 export interface FavoriteComparison {
@@ -68,3 +73,36 @@ export interface FavoriteComparison {
 }
 
 export type TabType = 'consultation' | 'treatment' | 'review';
+
+export const chiefComplaintLabels: Record<ChiefComplaintType, string> = {
+  toothache: '牙痛',
+  missing_tooth: '缺牙',
+  malocclusion: '牙齿不齐',
+  cleaning: '洗牙咨询',
+  other: '其他',
+};
+
+export const treatmentLabels: Record<TreatmentType, string> = {
+  root_canal: '根管治疗',
+  filling: '补牙',
+  implant: '种植牙',
+  orthodontics: '正畸',
+  removable_denture: '活动义齿',
+  fixed_bridge: '固定桥',
+  whitening: '美白',
+  scaling: '洁牙',
+  other: '其他',
+};
+
+export const concernOptions = [
+  '费用预算',
+  '治疗疼痛',
+  '治疗周期',
+  '美观效果',
+  '使用寿命',
+  '饮食影响',
+  '复诊次数',
+  '安全性',
+  '美观考虑',
+  '家属意见',
+];
